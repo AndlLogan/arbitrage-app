@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Калькулятор арбитража</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
+            --text-color: var(--tg-theme-text-color, #000000);
+            --hint-color: var(--tg-theme-hint-color, #999999);
+            --button-color: var(--tg-theme-button-color, #2481cc);
+            --button-text-color: var(--tg-theme-button-text-color, #ffffff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f1f1f1);
+            --danger-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+        }
+        
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0; padding: 16px; font-size: 14px;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 18px; text-align: center; margin-bottom: 16px; }
+
+        .badge {
+            display: inline-block; padding: 4px 10px;
+            border-radius: 12px; font-size: 12px;
+            font-weight: bold; margin-bottom: 10px;
+        }
+        .badge-circle { background: var(--button-color); color: var(--button-text-color); }
+        .badge-transfer { background: var(--warning-color); color: white; }
+        .badge-day { background: var(--success-color); color: white; }
+
+        .section-title {
+            font-size: 12px; color: var(--hint-color);
+            margin: 15px 0 5px 0;
+            border-bottom: 1px solid var(--hint-color);
+            padding-bottom: 4px;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .input-group { margin-bottom: 10px; }
+        label { display: block; font-size: 12px; margin-bottom: 4px; color: var(--hint-color); }
+
+        input[type="number"], input[type="datetime-local"], input[type="date"] {
+            width: 100%; padding: 10px; border-radius: 8px;
+            border: 1px solid var(--hint-color);
+            background-color: var(--secondary-bg); color: var(--text-color);
+            font-size: 14px; outline: none; font-family: inherit;
+        }
+        input:disabled { opacity: 0.5; }
+
+        .checkbox-group {
+            display: flex; align-items: center; margin: 15px 0;
+            background-color: var(--secondary-bg); padding: 10px; border-radius: 8px;
+        }
+        .checkbox-group input { width: 20px; height: 20px; margin-right: 10px; accent-color: var(--button-color); }
+        .checkbox-group label { margin: 0; font-size: 14px; color: var(--text-color); }
+
+        button {
+            width: 100%; padding: 12px; border-radius: 8px;
+            font-size: 15px; font-weight: bold; margin-top: 8px;
+            cursor: pointer; border: none;
+        }
+        .btn-primary { background-color: var(--button-color); color: var(--button-text-color); }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-warning { background-color: var(--warning-color); color: white; }
+        .btn-danger { background-color: var(--danger-color); color: white; }
+        .btn-secondary { background-color: var(--secondary-bg); color: var(--text-color); border: 1px solid var(--hint-color); }
+        .btn-small { font-size: 12px; padding: 8px; margin-top: 4px; }
+        button:active { opacity: 0.85; }
+
+        .quick-periods {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .results { margin-top: 20px; }
+        .result-card { background-color: var(--secondary-bg); padding: 14px; border-radius: 8px; margin-bottom: 10px; }
+        .result-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .result-row:last-child { margin-bottom: 0; }
+        .highlight { color: var(--success-color); font-weight: bold; }
+        .time-row { font-size: 12px; color: var(--hint-color); margin-bottom: 4px; display: flex; justify-content: space-between; }
+
+        .notice {
+            background: var(--warning-color); color: white;
+            padding: 10px; border-radius: 8px;
+            font-size: 13px; margin-bottom: 12px;
+        }
+        .circle-status {
+            text-align: center; font-size: 16px; font-weight: bold;
+            padding: 12px; background: var(--secondary-bg);
+            border-radius: 8px; margin-bottom: 10px;
+        }
+        .report-text {
+            background: var(--bg-color);
+            padding: 12px; border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📊 Калькулятор арбитража</h1>
+
+        <div id="transferNotice" class="notice" style="display:none;">
+            🔄 Перенесённый <b>круг №<span id="transferCircleNum"></span></b> с <span id="transferDate"></span>. Завершите его сегодня.
+        </div>
+
+        <div id="circleStatus" class="circle-status">
+            Текущий круг: <span id="currentCircleNum">1</span>
+        </div>
+
+        <div id="startSection">
+            <button class="btn-success" onclick="startCircle()" id="startBtn">▶️ Начать 1-й круг</button>
+            <button class="btn-secondary" onclick="showPeriodSelector()">📊 Выгрузить отчёт</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+
+        <div id="formSection" style="display:none;">
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Начальная сумма (₽)</label>
+                    <input type="number" id="amount" value="10000000">
+                </div>
+                <div class="input-group">
+                    <label>Номер круга</label>
+                    <input type="number" id="circleNumber" value="1" readonly style="opacity:0.7;">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Курс покупки USDT</label>
+                    <input type="number" step="0.01" id="buyPrice" value="84.65">
+                </div>
+                <div class="input-group">
+                    <label>Курс продажи USDT</label>
+                    <input type="number" step="0.01" id="sellPrice" value="87.98">
+                </div>
+            </div>
+
+            <div class="section-title">Время проведения круга</div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Начало круга</label>
+                    <input type="datetime-local" id="startTime" disabled>
+                </div>
+                <div class="input-group">
+                    <label>Окончание круга</label>
+                    <input type="datetime-local" id="endTime" disabled>
+                </div>
+            </div>
+
+            <div class="section-title">Комиссии и налоги</div>
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Комиссия биржи (%)</label>
+                    <input type="number" step="0.01" id="exchangeComm" value="0.7">
+                </div>
+                <div class="input-group">
+                    <label>Комиссия обменника (%)</label>
+                    <input type="number" step="0.01" id="exchangerComm" value="0.1">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="input-group">
+                    <label>Комиссия банка (₽)</label>
+                    <input type="number" step="1" id="bankComm" value="3000">
+                </div>
+                <div class="input-group">
+                    <label>Выплата команде (%)</label>
+                    <input type="number" step="0.1" id="teamPayout" value="15">
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="taxToggle" checked>
+                <label for="taxToggle">Учитывать налог 13%</label>
+            </div>
+
+            <button class="btn-primary" onclick="finishCircle()">✅ Завершить круг</button>
+            <button class="btn-warning" onclick="transferCircle()">⏭ Перенести на завтра</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <div id="nextSection" style="display:none;">
+            <button class="btn-success" onclick="resetForNextCircle()" id="nextBtn">▶️ Начать следующий круг</button>
+            <button class="btn-secondary" onclick="showPeriodSelector()">📊 Выгрузить отчёт</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        let state = {
+            lastActiveDate: null,
+            currentCircle: 1,
+            circleInProgress: false,
+            isCurrentCircleTransferred: false,
+            pendingTransfer: null
+        };
+
+        // --- Утилиты ---
+        function todayStr() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+        function dateStr(d) {
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+        function formatDateTime(dateString) {
+            if (!dateString) return '—';
+            return new Date(dateString).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+        function formatDateOnly(dateString) {
+            if (!dateString) return '';
+            return new Date(dateString).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+        function formatDateForFile(dateString) {
+            return new Date(dateString).toLocaleDateString('ru-RU').replace(/\./g, '-');
+        }
+        function calculateDuration(startStr, endStr) {
+            if (!startStr || !endStr) return '—';
+            const diffMs = new Date(endStr) - new Date(startStr);
+            if (diffMs < 0) return 'Ошибка времени';
+            const h = Math.floor(diffMs / 3600000);
+            const m = Math.floor((diffMs % 3600000) / 60000);
+            return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+        }
+        function nowLocalISO() {
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000;
+            return (new Date(now - offset)).toISOString().slice(0, 16);
+        }
+
+        function saveState() { localStorage.setItem('arbitrageState', JSON.stringify(state)); }
+        function loadState() {
+            const saved = localStorage.getItem('arbitrageState');
+            if (saved) { try { state = JSON.parse(saved); } catch(e) {} }
+        }
+        function getHistory() { return JSON.parse(localStorage.getItem('arbitrageHistory') || '[]'); }
+        function saveHistory(h) { localStorage.setItem('arbitrageHistory', JSON.stringify(h)); }
+
+        // --- Инициализация ---
+        function init() {
+            loadState();
+            const today = todayStr();
+            if (state.lastActiveDate && state.lastActiveDate !== today) {
+                handleNewDay();
+            }
+            state.lastActiveDate = today;
+            saveState();
+
+            if (state.pendingTransfer) showTransferNotice(state.pendingTransfer);
+            updateUI();
+        }
+
+        function handleNewDay() {
+            if (state.pendingTransfer) {
+                state.currentCircle = state.pendingTransfer.circleNumber;
+            } else {
+                state.currentCircle = 1;
+            }
+            state.circleInProgress = false;
+        }
+
+        function showTransferNotice(pt) {
+            document.getElementById('transferCircleNum').innerText = pt.circleNumber;
+            document.getElementById('transferDate').innerText = formatDateOnly(pt.fromDate);
+            document.getElementById('transferNotice').style.display = 'block';
+        }
+
+        function updateUI() {
+            const startSection = document.getElementById('startSection');
+            const formSection = document.getElementById('formSection');
+            const nextSection = document.getElementById('nextSection');
+
+            document.getElementById('currentCircleNum').innerText = state.currentCircle;
+
+            if (state.circleInProgress) {
+                startSection.style.display = 'none';
+                formSection.style.display = 'block';
+                nextSection.style.display = 'none';
+                document.getElementById('circleNumber').value = state.currentCircle;
+            } else {
+                startSection.style.display = 'block';
+                formSection.style.display = 'none';
+                nextSection.style.display = 'none';
+                document.getElementById('startBtn').innerText = `▶️ Начать ${state.currentCircle}-й круг`;
+            }
+        }
+
+        // --- Старт круга ---
+        function startCircle() {
+            state.circleInProgress = true;
+            saveState();
+            document.getElementById('results').innerHTML = '';
+
+            const startInput = document.getElementById('startTime');
+            const endInput = document.getElementById('endTime');
+
+            if (state.pendingTransfer) {
+                const pt = state.pendingTransfer;
+                document.getElementById('amount').value = pt.amount;
+                document.getElementById('buyPrice').value = pt.buyPrice;
+                document.getElementById('sellPrice').value = pt.sellPrice;
+                document.getElementById('exchangeComm').value = pt.exchangeComm;
+                document.getElementById('exchangerComm').value = pt.exchangerComm;
+                document.getElementById('bankComm').value = pt.bankComm;
+                document.getElementById('teamPayout').value = pt.teamPayout;
+                document.getElementById('taxToggle').checked = pt.taxEnabled;
+                startInput.value = pt.startTime;
+                state.isCurrentCircleTransferred = true;
+                document.getElementById('transferNotice').style.display = 'none';
+                state.pendingTransfer = null;
+                saveState();
+                tg.showAlert(`Продолжаем круг №${state.currentCircle}. Время начала сохранено со вчера.`);
+            } else {
+                startInput.value = nowLocalISO();
+                state.isCurrentCircleTransferred = false;
+                saveState();
+            }
+            endInput.value = '';
+            tg.HapticFeedback.impactOccurred('light');
+            updateUI();
+        }
+
+        // --- Завершение круга ---
+        function finishCircle() {
+            document.getElementById('endTime').value = nowLocalISO();
+
+            const amount = parseFloat(document.getElementById('amount').value);
+            const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+            const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+            const exchangeCommPct = parseFloat(document.getElementById('exchangeComm').value) / 100;
+            const exchangerCommPct = parseFloat(document.getElementById('exchangerComm').value) / 100;
+            const bankCommRub = parseFloat(document.getElementById('bankComm').value);
+            const teamPayoutPct = parseFloat(document.getElementById('teamPayout').value) / 100;
+            const circleNumber = state.currentCircle;
+            const taxEnabled = document.getElementById('taxToggle').checked;
+            const startTimeVal = document.getElementById('startTime').value;
+            const endTimeVal = document.getElementById('endTime').value;
+            const wasTransferred = state.isCurrentCircleTransferred;
+
+            if (isNaN(amount) || isNaN(buyPrice) || isNaN(sellPrice) || isNaN(bankCommRub)) {
+                tg.showAlert("Заполните все поля корректными числами!");
+                return;
+            }
+
+            const spreadPct = (sellPrice - buyPrice) / buyPrice;
+            const grossProfit = amount * spreadPct;
+            const exchangeComm = amount * exchangeCommPct;
+            const exchangerComm = (amount - exchangeComm) * exchangerCommPct;
+            const totalExpenses = exchangeComm + exchangerComm + bankCommRub;
+            const preTaxProfit = grossProfit - totalExpenses;
+            const tax = taxEnabled ? preTaxProfit * 0.13 : 0;
+            const profitAfterTax = preTaxProfit - tax;
+            let teamPayout = 0;
+            if (circleNumber >= 3) teamPayout = profitAfterTax * teamPayoutPct;
+            const netProfit = profitAfterTax - teamPayout;
+            const durationStr = calculateDuration(startTimeVal, endTimeVal);
+
+            const history = getHistory();
+            history.push({
+                date: state.lastActiveDate,
+                circle: circleNumber,
+                start: startTimeVal,
+                end: endTimeVal,
+                duration: durationStr,
+                amount: amount,
+                netProfit: netProfit,
+                transferred: wasTransferred,
+                teamPayout: teamPayout,
+                tax: tax,
+                grossProfit: grossProfit,
+                expenses: totalExpenses
+            });
+            saveHistory(history);
+
+            const badgeClass = wasTransferred ? 'badge-transfer' : 'badge-circle';
+            const badgeText = wasTransferred
+                ? `Круг №${circleNumber} (перенесённый) завершён`
+                : `Круг №${circleNumber} завершён`;
+
+            let html = `
+                <div class="result-card">
+                    <div style="text-align:center; margin-bottom:10px;">
+                        <span class="badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div style="background:var(--bg-color); padding:8px; border-radius:6px; margin-bottom:12px;">
+                        <div class="time-row"><span>Начало:</span> <span>${formatDateTime(startTimeVal)}</span></div>
+                        <div class="time-row"><span>Окончание:</span> <span>${formatDateTime(endTimeVal)}</span></div>
+                        <div class="time-row" style="font-weight:bold; color:var(--text-color); margin-top:4px;">
+                            <span>Длительность:</span> <span>${durationStr}</span>
+                        </div>
+                    </div>
+                    <div class="result-row"><span>Спред:</span> <span style="color:var(--success-color)">${(spreadPct * 100).toFixed(2)}%</span></div>
+                    <div class="result-row"><span>Валовая прибыль:</span> <span>${grossProfit.toLocaleString('ru-RU')} ₽</span></div>
+                    <div style="margin-top:10px; font-size:12px; color:var(--hint-color);">Расходы:</div>
+                    <div class="result-row" style="font-size:12px;"><span>Биржа:</span> <span>-${exchangeComm.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row" style="font-size:12px;"><span>Обменник:</span> <span>-${exchangerComm.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row" style="font-size:12px;"><span>Банк:</span> <span>-${bankCommRub.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row" style="font-weight:bold;"><span>Итого расходов:</span> <span style="color:var(--danger-color)">-${totalExpenses.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row" style="margin-top:10px;"><span>Прибыль до налога:</span> <span>${preTaxProfit.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row"><span>Налог 13%:</span> <span style="color:var(--danger-color)">-${tax.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="result-row" style="font-weight:bold;"><span>Прибыль после налога:</span> <span>${profitAfterTax.toLocaleString('ru-RU')} ₽</span></div>
+            `;
+            if (teamPayout > 0) {
+                html += `<div class="result-row" style="margin-top:10px; color:var(--danger-color);">
+                            <span>Выплата команде (${(teamPayoutPct*100).toFixed(1)}%):</span> 
+                            <span>-${teamPayout.toLocaleString('ru-RU')} ₽</span>
+                         </div>`;
+            } else if (circleNumber < 3) {
+                html += `<div style="font-size:12px; color:var(--hint-color); margin-top:10px;">* Выплата команде не производится (круг < 3)</div>`;
+            }
+            html += `<div class="result-row" style="font-size:16px; margin-top:15px; border-top:2px solid var(--button-color); padding-top:10px;">
+                        <span>ЧИСТАЯ ПРИБЫЛЬ:</span> 
+                        <span class="highlight">${netProfit.toLocaleString('ru-RU')} ₽</span>
+                     </div>
+                </div>`;
+            document.getElementById('results').innerHTML = html;
+
+            state.circleInProgress = false;
+            let alertMsg = '';
+            if (wasTransferred) {
+                state.currentCircle = 1;
+                state.isCurrentCircleTransferred = false;
+                alertMsg = `Перенесённый круг №${circleNumber} завершён. Следующий круг — №1 (новый день).`;
+            } else if (state.currentCircle >= 4) {
+                state.currentCircle = 1;
+                alertMsg = "Все 4 круга завершены! Следующий круг начнётся с 1-го.";
+            } else {
+                state.currentCircle += 1;
+            }
+            saveState();
+            if (alertMsg) tg.showAlert(alertMsg);
+
+            document.getElementById('nextBtn').innerText = `▶️ Начать ${state.currentCircle}-й круг`;
+            document.getElementById('nextSection').style.display = 'block';
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('startSection').style.display = 'none';
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        // --- Перенос круга ---
+        function transferCircle() {
+            const amount = parseFloat(document.getElementById('amount').value);
+            const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+            const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+            const exchangeComm = parseFloat(document.getElementById('exchangeComm').value);
+            const exchangerComm = parseFloat(document.getElementById('exchangerComm').value);
+            const bankComm = parseFloat(document.getElementById('bankComm').value);
+            const teamPayout = parseFloat(document.getElementById('teamPayout').value);
+            const taxEnabled = document.getElementById('taxToggle').checked;
+            const startTime = document.getElementById('startTime').value || nowLocalISO();
+
+            state.pendingTransfer = {
+                startTime, circleNumber: state.currentCircle,
+                fromDate: state.lastActiveDate,
+                amount, buyPrice, sellPrice,
+                exchangeComm, exchangerComm, bankComm, teamPayout, taxEnabled
+            };
+            state.circleInProgress = false;
+            saveState();
+
+            tg.showAlert(`Круг №${state.currentCircle} перенесён на завтра. После его закрытия счётчик начнётся с 1-го круга.`);
+            tg.HapticFeedback.notificationOccurred('warning');
+
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('startSection').style.display = 'block';
+            updateUI();
+        }
+
+        function resetForNextCircle() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('nextSection').style.display = 'none';
+            startCircle();
+        }
+
+        // ============================================================
+        // 🏁 ЗАВЕРШИТЬ ДЕНЬ
+        // ============================================================
+        function finishDay() {
+            const confirmMsg = state.circleInProgress
+                ? `Круг №${state.currentCircle} не завершён. Завершить день без него?`
+                : "Завершить рабочий день? Счётчик сбросится на 1-й круг.";
+
+            tg.showConfirm(confirmMsg, (confirmed) => {
+                if (!confirmed) return;
+
+                showPeriodSelector(state.lastActiveDate, state.lastActiveDate);
+
+                state.circleInProgress = false;
+                state.currentCircle = 1;
+                state.isCurrentCircleTransferred = false;
+                state.pendingTransfer = null;
+                saveState();
+
+                document.getElementById('transferNotice').style.display = 'none';
+                document.getElementById('formSection').style.display = 'none';
+                document.getElementById('nextSection').style.display = 'block';
+                document.getElementById('startBtn').innerText = '▶️ Начать 1-й круг';
+
+                tg.HapticFeedback.notificationOccurred('success');
+            });
+        }
+
+        // ============================================================
+        // 📊 ВЫБОР ПЕРИОДА И ОТЧЁТ
+        // ============================================================
+        function showPeriodSelector(defaultFrom, defaultTo) {
+            const today = todayStr();
+            const from = defaultFrom || today;
+            const to = defaultTo || today;
+
+            let html = `
+                <div class="result-card">
+                    <div style="text-align:center; margin-bottom:12px;">
+                        <span class="badge badge-day">📊 Выгрузка отчёта</span>
+                    </div>
+
+                    <div style="font-size:12px; color:var(--hint-color); margin-bottom:6px;">Быстрый выбор:</div>
+                    <div class="quick-periods">
+                        <button class="btn-secondary btn-small" onclick="setPeriod('today')">Сегодня</button>
+                        <button class="btn-secondary btn-small" onclick="setPeriod('yesterday')">Вчера</button>
+                        <button class="btn-secondary btn-small" onclick="setPeriod('7d')">7 дней</button>
+                        <button class="btn-secondary btn-small" onclick="setPeriod('30d')">30 дней</button>
+                        <button class="btn-secondary btn-small" onclick="setPeriod('month')">Этот месяц</button>
+                        <button class="btn-secondary btn-small" onclick="setPeriod('all')">Всё время</button>
+                    </div>
+
+                    <div class="section-title">Или выберите вручную</div>
+                    <div class="grid-2">
+                        <div class="input-group">
+                            <label>Дата с</label>
+                            <input type="date" id="periodFrom" value="${from}">
+                        </div>
+                        <div class="input-group">
+                            <label>Дата по</label>
+                            <input type="date" id="periodTo" value="${to}">
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" onclick="buildAndShowReport()">📊 Построить отчёт</button>
+                    <button class="btn-secondary" onclick="backToMain()">← Назад</button>
+                </div>
+            `;
+            document.getElementById('results').innerHTML = html;
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function setPeriod(preset) {
+            const now = new Date();
+            const today = dateStr(now);
+            let from = today, to = today;
+
+            switch (preset) {
+                case 'today':
+                    from = today; to = today; break;
+                case 'yesterday': {
+                    const y = new Date(now); y.setDate(y.getDate() - 1);
+                    from = dateStr(y); to = dateStr(y); break;
+                }
+                case '7d': {
+                    const f = new Date(now); f.setDate(f.getDate() - 6);
+                    from = dateStr(f); to = today; break;
+                }
+                case '30d': {
+                    const f = new Date(now); f.setDate(f.getDate() - 29);
+                    from = dateStr(f); to = today; break;
+                }
+                case 'month': {
+                    const f = new Date(now.getFullYear(), now.getMonth(), 1);
+                    from = dateStr(f); to = today; break;
+                }
+                case 'all': {
+                    const history = getHistory();
+                    if (history.length === 0) { from = today; to = today; }
+                    else {
+                        const dates = history.map(h => h.date).sort();
+                        from = dates[0]; to = today;
+                    }
+                    break;
+                }
+            }
+
+            document.getElementById('periodFrom').value = from;
+            document.getElementById('periodTo').value = to;
+            buildAndShowReport();
+        }
+
+        function backToMain() {
+            document.getElementById('results').innerHTML = '';
+            updateUI();
+        }
+
+        function buildReport(fromDate, toDate) {
+            const history = getHistory().filter(h => h.date >= fromDate && h.date <= toDate);
+
+            const fromFmt = formatDateOnly(fromDate);
+            const toFmt = formatDateOnly(toDate);
+            const periodLabel = fromDate === toDate ? fromFmt : `${fromFmt} — ${toFmt}`;
+
+            if (history.length === 0) {
+                return `📅 ОТЧЁТ ЗА ПЕРИОД\n${periodLabel}\n\nНет завершённых кругов за выбранный период.`;
+            }
+
+            // Группируем по дням
+            const byDay = {};
+            history.forEach(h => {
+                if (!byDay[h.date]) byDay[h.date] = [];
+                byDay[h.date].push(h);
+            });
+
+            const sortedDays = Object.keys(byDay).sort();
+            let lines = [`📅 ОТЧЁТ ЗА ПЕРИОД`, `${periodLabel}`, '━━━━━━━━━━━━━━━━━━━━', ''];
+
+            let grandTotal = { circles: 0, net: 0, tax: 0, team: 0, amount: 0 };
+
+            sortedDays.forEach(day => {
+                const dayEntries = byDay[day].sort((a,b) => a.circle - b.circle);
+                const dayTotal = { circles: 0, net: 0, tax: 0, team: 0, amount: 0 };
+
+                lines.push(`📆 ${formatDateOnly(day)}`);
+
+                dayEntries.forEach(h => {
+                    const mark = h.transferred ? ' ⏭' : '';
+                    lines.push(`  🔄 Круг №${h.circle}${mark}`);
+                    lines.push(`     ${formatDateTime(h.start)} — ${formatDateTime(h.end)} (${h.duration})`);
+                    lines.push(`     Сумма: ${(h.amount || 0).toLocaleString('ru-RU')} ₽`);
+                    lines.push(`     Чистая прибыль: ${(h.netProfit || 0).toLocaleString('ru-RU')} ₽`);
+
+                    dayTotal.circles++;
+                    dayTotal.net += h.netProfit || 0;
+                    dayTotal.tax += h.tax || 0;
+                    dayTotal.team += h.teamPayout || 0;
+                    dayTotal.amount += h.amount || 0;
+                });
+
+                lines.push(`  ─── Итого за день: ${dayTotal.net.toLocaleString('ru-RU')} ₽ (${dayTotal.circles} кр.)`);
+                lines.push('');
+
+                grandTotal.circles += dayTotal.circles;
+                grandTotal.net += dayTotal.net;
+                grandTotal.tax += dayTotal.tax;
+                grandTotal.team += dayTotal.team;
+                grandTotal.amount += dayTotal.amount;
+            });
+
+            lines.push('━━━━━━━━━━━━━━━━━━━━');
+            lines.push(`📊 ИТОГО ЗА ПЕРИОД:`);
+            lines.push(`Дней в отчёте: ${sortedDays.length}`);
+            lines.push(`Кругов завершено: ${grandTotal.circles}`);
+            lines.push(`Общий оборот: ${grandTotal.amount.toLocaleString('ru-RU')} ₽`);
+            lines.push(`Налог (всего): ${grandTotal.tax.toLocaleString('ru-RU')} ₽`);
+            lines.push(`Выплаты команде (всего): ${grandTotal.team.toLocaleString('ru-RU')} ₽`);
+            lines.push(`💰 ЧИСТАЯ ПРИБЫЛЬ: ${grandTotal.net.toLocaleString('ru-RU')} ₽`);
+
+            if (sortedDays.length > 1) {
+                const avg = grandTotal.net / sortedDays.length;
+                lines.push(`📈 Средняя прибыль в день: ${avg.toLocaleString('ru-RU')} ₽`);
+            }
+
+            return lines.join('\n');
+        }
+
+        function buildAndShowReport() {
+            const fromDate = document.getElementById('periodFrom').value;
+            const toDate = document.getElementById('periodTo').value;
+
+            if (!fromDate || !toDate) {
+                tg.showAlert("Укажите обе даты периода.");
+                return;
+            }
+            if (fromDate > toDate) {
+                tg.showAlert("Дата «с» не может быть позже даты «по».");
+                return;
+            }
+
+            const reportText = buildReport(fromDate, toDate);
+            window.__lastReport = reportText;
+            window.__reportPeriod = { from: fromDate, to: toDate };
+
+            const safeText = reportText.replace(/</g, '&lt;');
+            let html = `
+                <div class="result-card">
+                    <div style="text-align:center; margin-bottom:10px;">
+                        <span class="badge badge-day">📅 Отчёт за период</span>
+                    </div>
+                    <div class="report-text">${safeText}</div>
+                    <button class="btn-primary" onclick="downloadReport()">📥 Скачать TXT</button>
+                    <button class="btn-secondary" onclick="copyReport()">📋 Скопировать</button>
+                    <button class="btn-success" onclick="sendReportToChat()">📤 Отправить в чат</button>
+                    <button class="btn-secondary" onclick="showPeriodSelector('${fromDate}', '${toDate}')">← Изменить период</button>
+                    <button class="btn-secondary" onclick="backToMain()">🏠 На главную</button>
+                </div>
+            `;
+            document.getElementById('results').innerHTML = html;
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function downloadReport() {
+            const text = window.__lastReport || '';
+            const period = window.__reportPeriod || { from: todayStr(), to: todayStr() };
+            const nameFrom = formatDateForFile(period.from);
+            const nameTo = formatDateForFile(period.to);
+            const filename = period.from === period.to
+                ? `arbitrage_${nameFrom}.txt`
+                : `arbitrage_${nameFrom}_${nameTo}.txt`;
+
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function copyReport() {
+            const text = window.__lastReport || '';
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    tg.showAlert("Отчёт скопирован в буфер обмена ✅");
+                    tg.HapticFeedback.notificationOccurred('success');
+                }).catch(() => {
+                    tg.showAlert("Не удалось скопировать.");
+                });
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                tg.showAlert("Отчёт скопирован ✅");
+            }
+        }
+
+        function sendReportToChat() {
+            const text = window.__lastReport || '';
+            const period = window.__reportPeriod || { from: todayStr(), to: todayStr() };
+            try {
+                tg.sendData(JSON.stringify({
+                    type: 'period_report',
+                    from: period.from,
+                    to: period.to,
+                    text: text
+                }));
+                tg.HapticFeedback.notificationOccurred('success');
+            } catch (e) {
+                tg.showAlert("Отправка доступна только внутри Telegram-бота.");
+            }
+        }
+
+        // --- Запуск ---
+        init();
+    </script>
+</body>
+</html>
