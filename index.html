@@ -404,6 +404,11 @@
 
         const TAX_PCT = 13; // фиксированный налог
 
+        // Округление до 2 знаков после запятой
+        function round2(n) {
+            return Math.round(n * 100) / 100;
+        }
+
         // --- Утилиты ---
         function todayStr() {
             const d = new Date();
@@ -509,7 +514,6 @@
             const amountInput = document.getElementById('amount');
 
             if (state.pendingTransfer) {
-                // Восстанавливаем перенесённый круг
                 const pt = state.pendingTransfer;
                 amountInput.value = pt.amount;
                 document.getElementById('buyPrice').value = pt.buyPrice;
@@ -526,24 +530,20 @@
                 saveState();
                 tg.showAlert(`Продолжаем круг №${state.currentCircle}. Время начала сохранено со вчера.`);
             } else {
-                // Обычный новый круг
-
-                // 1) Определяем актуальное тело депозита из поля
                 const deposit = parseFloat(amountInput.value) || state.currentAmount || 0;
                 state.currentAmount = deposit;
 
-                // 2) Если решено было перенести прибыль — прибавляем
                 let newAmount = deposit;
                 if (state.carryProfit && state.carryProfit > 0) {
                     newAmount = deposit + state.carryProfit;
                 }
 
+                // Округляем до 2 знаков после запятой
+                newAmount = round2(newAmount);
+
                 amountInput.value = newAmount;
 
-                // 3) Сбрасываем флаг переноса — он применён
                 state.carryProfit = 0;
-
-                // 4) Устанавливаем время начала
                 startInput.value = nowLocalISO();
                 state.isCurrentCircleTransferred = false;
 
@@ -580,16 +580,15 @@
             }
 
             const spreadPct = (sellPrice - buyPrice) / buyPrice;
-            const grossProfit = amount * spreadPct;
-            const exchangeComm = amount * exchangeCommPct;
-            const exchangerComm = (amount - exchangeComm) * exchangerCommPct;
-            const totalExpenses = exchangeComm + exchangerComm + bankCommRub;
-            const preTaxProfit = grossProfit - totalExpenses;
-            const tax = taxEnabled ? preTaxProfit * (TAX_PCT / 100) : 0;
-            const netProfit = preTaxProfit - tax;
+            const grossProfit = round2(amount * spreadPct);
+            const exchangeComm = round2(amount * exchangeCommPct);
+            const exchangerComm = round2((amount - exchangeComm) * exchangerCommPct);
+            const totalExpenses = round2(exchangeComm + exchangerComm + bankCommRub);
+            const preTaxProfit = round2(grossProfit - totalExpenses);
+            const tax = taxEnabled ? round2(preTaxProfit * (TAX_PCT / 100)) : 0;
+            const netProfit = round2(preTaxProfit - tax);
             const durationStr = calculateDuration(startTimeVal, endTimeVal);
 
-            // Сохраняем тело депозита текущего круга
             state.currentAmount = amount;
 
             const history = getHistory();
@@ -638,7 +637,6 @@
 
             tg.HapticFeedback.notificationOccurred('success');
 
-            // Спрашиваем про перенос прибыли на следующий круг
             setTimeout(() => {
                 askCarryProfit(netProfit);
             }, 300);
@@ -805,6 +803,7 @@
 
             let totalNet = 0;
             history.forEach(h => { totalNet += h.netProfit || 0; });
+            totalNet = round2(totalNet);
 
             const defaultPct = 15;
 
@@ -837,8 +836,8 @@
 
         function updatePayoutPreview(totalNet) {
             const pct = parseFloat(document.getElementById('payoutPctInput').value) || 0;
-            const teamAmount = totalNet * (pct / 100);
-            const remainder = totalNet - teamAmount;
+            const teamAmount = round2(totalNet * (pct / 100));
+            const remainder = round2(totalNet - teamAmount);
 
             document.getElementById('payoutPreview').innerHTML = `
                 <div class="result-row">
@@ -858,7 +857,7 @@
                 tg.showAlert("Введите корректный процент (0–100).");
                 return;
             }
-            const teamAmount = totalNet * (pct / 100);
+            const teamAmount = round2(totalNet * (pct / 100));
 
             const payouts = getPayouts();
             payouts[state.lastActiveDate] = {
@@ -875,7 +874,7 @@
             if (totalDayNet > 0) {
                 history.forEach(h => {
                     if (h.date === state.lastActiveDate) {
-                        h.teamPayout = (h.netProfit / totalDayNet) * teamAmount;
+                        h.teamPayout = round2((h.netProfit / totalDayNet) * teamAmount);
                     }
                 });
                 saveHistory(history);
@@ -910,7 +909,13 @@
                 totalGross += h.grossProfit || 0;
             });
 
-            const finalNet = totalNet - teamAmount;
+            totalNet = round2(totalNet);
+            totalTurnover = round2(totalTurnover);
+            totalTax = round2(totalTax);
+            totalExpenses = round2(totalExpenses);
+            totalGross = round2(totalGross);
+
+            const finalNet = round2(totalNet - teamAmount);
 
             let html = `
                 <div class="result-card" style="border:2px solid var(--success-color);">
@@ -1090,7 +1095,7 @@
                 });
 
                 const dayPayout = payouts[day];
-                const dayFinal = dayPayout ? (dayTotal.net - dayPayout.amount) : dayTotal.net;
+                const dayFinal = dayPayout ? round2(dayTotal.net - dayPayout.amount) : round2(dayTotal.net);
 
                 lines.push(`  ─── Итого за день: ${dayTotal.net.toLocaleString('ru-RU')} ₽ (${dayTotal.circles} кр.)`);
                 if (dayPayout) {
