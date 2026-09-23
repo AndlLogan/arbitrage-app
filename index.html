@@ -57,7 +57,7 @@
             color: var(--hint-color);
         }
 
-        input[type="number"], input[type="date"] {
+        input[type="number"] {
             width: 100%;
             padding: 7px 8px;
             border-radius: 6px;
@@ -68,6 +68,27 @@
             outline: none;
             font-family: inherit;
             height: 38px;
+        }
+
+        /* Поля даты в отчёте — компактные и по центру */
+        input[type="date"] {
+            width: 50%;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--hint-color);
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+            height: 34px;
+            display: block;
+            margin: 0 auto;
+            text-align: center;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            margin: 0;
+            padding: 0;
         }
 
         input[type="datetime-local"] {
@@ -402,9 +423,8 @@
             currentAmount: 10000000
         };
 
-        const TAX_PCT = 13; // фиксированный налог
+        const TAX_PCT = 13;
 
-        // Округление до 2 знаков после запятой
         function round2(n) {
             return Math.round(n * 100) / 100;
         }
@@ -457,15 +477,79 @@
         function init() {
             loadState();
             const today = todayStr();
+
             if (state.lastActiveDate && state.lastActiveDate !== today) {
                 handleNewDay();
             }
+            const isSameDay = state.lastActiveDate === today;
+
+            const history = getHistory().filter(h => h.date === today);
+            const hasActiveCycle = isSameDay && (
+                state.circleInProgress ||
+                state.pendingTransfer ||
+                (state.currentCircle > 1 && !getPayouts()[today]) ||
+                history.length > 0
+            );
+
             state.lastActiveDate = today;
             saveState();
 
             if (state.pendingTransfer) showTransferNotice(state.pendingTransfer);
             updateUI();
             renderTodayCircles();
+
+            // Спрашиваем про продолжение работы (только если цикл активен и день не закрыт)
+            if (hasActiveCycle && !getPayouts()[today]) {
+                setTimeout(() => {
+                    askContinueOrNew();
+                }, 400);
+            }
+        }
+
+        function askContinueOrNew() {
+            const msg = 'У вас есть незавершённый цикл за сегодня. Продолжить работу с текущего цикла или начать новый?';
+
+            if (typeof tg.showPopup === 'function') {
+                tg.showPopup({
+                    title: 'Продолжить работу?',
+                    message: msg,
+                    buttons: [
+                        { id: 'continue', type: 'default', text: 'Продолжить' },
+                        { id: 'new', type: 'destructive', text: 'Начать новый' }
+                    ]
+                }, (buttonId) => {
+                    if (buttonId === 'new') {
+                        startFreshCycle();
+                    }
+                });
+            } else {
+                const cont = window.confirm(msg + '\n\nOK — продолжить.\nОтмена — начать новый цикл.');
+                if (!cont) {
+                    startFreshCycle();
+                }
+            }
+        }
+
+        function startFreshCycle() {
+            state.circleInProgress = false;
+            state.currentCircle = 1;
+            state.carryProfit = 0;
+            state.pendingTransfer = null;
+            state.lastFinishedCircle = null;
+            state.isCurrentCircleTransferred = false;
+            saveState();
+
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('topCircles').innerHTML = '';
+            document.getElementById('topDivider').style.display = 'none';
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('startSection').style.display = 'block';
+            document.getElementById('nextSection').style.display = 'none';
+            document.getElementById('transferNotice').style.display = 'none';
+
+            updateUI();
+            renderTodayCircles();
+            tg.HapticFeedback.notificationOccurred('success');
         }
 
         function handleNewDay() {
@@ -538,9 +622,7 @@
                     newAmount = deposit + state.carryProfit;
                 }
 
-                // Округляем до 2 знаков после запятой
                 newAmount = round2(newAmount);
-
                 amountInput.value = newAmount;
 
                 state.carryProfit = 0;
@@ -642,7 +724,6 @@
             }, 300);
         }
 
-        // --- Спрашиваем про перенос прибыли ---
         function askCarryProfit(netProfit) {
             const msg = `Перенести прибыль круга (${netProfit.toLocaleString('ru-RU')} ₽) на следующий круг?`;
 
@@ -705,7 +786,7 @@
         }
 
         // ============================================================
-        // 📋 ВЕРХНИЙ БЛОК: мини-статистика + круги от 1-го к последнему
+        // 📋 ВЕРХНИЙ БЛОК
         // ============================================================
         function renderTodayCircles() {
             const topBox = document.getElementById('topCircles');
@@ -732,6 +813,7 @@
 
             let totalNet = 0;
             sorted.forEach(h => { totalNet += h.netProfit || 0; });
+            totalNet = round2(totalNet);
 
             let html = `
                 <div class="stats-mini">
@@ -995,13 +1077,13 @@
                     </div>
 
                     <div class="section-title">Или выберите вручную</div>
-                    <div class="grid-2">
-                        <div class="input-group">
-                            <label>Дата с</label>
+                    <div class="grid-2" style="align-items: end;">
+                        <div class="input-group" style="text-align:center;">
+                            <label style="text-align:center;">Дата с</label>
                             <input type="date" id="periodFrom" value="${from}">
                         </div>
-                        <div class="input-group">
-                            <label>Дата по</label>
+                        <div class="input-group" style="text-align:center;">
+                            <label style="text-align:center;">Дата по</label>
                             <input type="date" id="periodTo" value="${to}">
                         </div>
                     </div>
