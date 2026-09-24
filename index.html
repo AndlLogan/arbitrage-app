@@ -1,4 +1,411 @@
-    <script>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Калькулятор арбитража</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #ffffff);
+            --text-color: var(--tg-theme-text-color, #000000);
+            --hint-color: var(--tg-theme-hint-color, #999999);
+            --button-color: var(--tg-theme-button-color, #2481cc);
+            --button-text-color: var(--tg-theme-button-text-color, #ffffff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f1f1f1);
+            --danger-color: #e74c3c;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+        }
+        
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0; padding: 14px; font-size: 16px;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { font-size: 19px; text-align: center; margin-bottom: 12px; }
+
+        .badge {
+            display: inline-block; padding: 4px 10px;
+            border-radius: 12px; font-size: 14px;
+            font-weight: bold; margin-bottom: 10px;
+        }
+        .badge-circle { background: var(--button-color); color: var(--button-text-color); }
+        .badge-transfer { background: var(--warning-color); color: white; }
+        .badge-day { background: var(--success-color); color: white; }
+
+        .section-title {
+            font-size: 13px; color: var(--hint-color);
+            margin: 10px 0 4px 0;
+            border-bottom: 1px solid var(--hint-color);
+            padding-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+        .input-group { margin-bottom: 6px; }
+        label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 2px;
+            color: var(--hint-color);
+        }
+
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 7px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--hint-color);
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            font-size: 15px;
+            outline: none;
+            font-family: inherit;
+            height: 38px;
+        }
+
+        input[type="date"] {
+            width: 50%;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--hint-color);
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+            height: 34px;
+            display: block;
+            margin: 0 auto;
+            text-align: center;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            margin: 0;
+            padding: 0;
+        }
+
+        input[type="datetime-local"] {
+            width: 100%;
+            padding: 6px 4px;
+            border-radius: 6px;
+            border: 1px solid var(--hint-color);
+            background-color: var(--secondary-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+            height: 38px;
+            -webkit-appearance: none;
+            appearance: none;
+            text-align: center;
+        }
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            margin: 0;
+            padding: 0;
+        }
+
+        input:focus { border-color: var(--button-color); }
+
+        .checkbox-group {
+            display: flex; align-items: center;
+            margin: 8px 0;
+            background-color: var(--secondary-bg);
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        .checkbox-group input {
+            width: 20px; height: 20px;
+            margin-right: 8px;
+            accent-color: var(--button-color);
+        }
+        .checkbox-group label { margin: 0; font-size: 15px; color: var(--text-color); }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 6px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary { background-color: var(--button-color); color: var(--button-text-color); }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-warning { background-color: var(--warning-color); color: white; }
+        .btn-danger { background-color: var(--danger-color); color: white; }
+        .btn-secondary { background-color: var(--secondary-bg); color: var(--text-color); border: 1px solid var(--hint-color); }
+        .btn-small { font-size: 14px; padding: 8px; margin-top: 4px; }
+        button:active { opacity: 0.85; }
+
+        .quick-periods {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .result-card { background-color: var(--secondary-bg); padding: 12px; border-radius: 8px; margin-bottom: 8px; }
+        .result-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 15px; }
+        .result-row:last-child { margin-bottom: 0; }
+        .highlight { color: var(--success-color); font-weight: bold; }
+        .time-row { font-size: 13px; color: var(--hint-color); margin-bottom: 3px; display: flex; justify-content: space-between; }
+
+        .notice {
+            background: var(--warning-color); color: white;
+            padding: 8px 10px; border-radius: 8px;
+            font-size: 14px; margin-bottom: 10px;
+        }
+        .circle-status {
+            text-align: center; font-size: 17px; font-weight: bold;
+            padding: 10px; background: var(--secondary-bg);
+            border-radius: 8px; margin-bottom: 8px;
+        }
+        .report-text {
+            background: var(--bg-color);
+            padding: 12px; border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        .circle-item {
+            background: var(--secondary-bg);
+            border-radius: 6px;
+            margin-bottom: 4px;
+            overflow: hidden;
+        }
+
+        .circle-summary {
+            padding: 6px 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        .circle-summary:active { opacity: 0.7; }
+
+        .cs-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            min-width: 0;
+        }
+        .cs-arrow {
+            color: var(--hint-color);
+            font-size: 12px;
+            transition: transform 0.15s;
+            flex-shrink: 0;
+            width: 12px;
+            text-align: center;
+        }
+        details[open] .cs-arrow { transform: rotate(90deg); }
+
+        .cs-title {
+            font-weight: bold;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .cs-amount {
+            font-size: 12px;
+            color: var(--hint-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cs-profit {
+            color: var(--success-color);
+            font-weight: bold;
+            font-size: 14px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .circle-details {
+            padding: 10px;
+            border-top: 1px solid var(--hint-color);
+            background: var(--bg-color);
+        }
+
+        #topCircles { margin-bottom: 10px; }
+
+        .divider {
+            height: 1px;
+            background: var(--hint-color);
+            opacity: 0.3;
+            margin: 12px 0;
+        }
+
+        .stats-mini {
+            background: var(--secondary-bg);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 3px solid var(--button-color);
+            font-size: 13px;
+            gap: 8px;
+        }
+        .stats-mini .sm-label {
+            color: var(--hint-color);
+            font-size: 12px;
+        }
+        .stats-mini .sm-value {
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--success-color);
+        }
+
+        .payout-card {
+            background: var(--secondary-bg);
+            border: 2px solid var(--warning-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .payout-total {
+            text-align: center;
+            font-size: 16px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed var(--hint-color);
+        }
+        .payout-total .pt-label { color: var(--hint-color); font-size: 13px; }
+        .payout-total .pt-value {
+            display: block;
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--success-color);
+            margin-top: 4px;
+        }
+        .payout-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 15px;
+            gap: 8px;
+        }
+        .payout-row input {
+            width: 80px;
+            text-align: right;
+        }
+        .payout-split {
+            background: var(--bg-color);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📊 Калькулятор арбитража</h1>
+
+        <div id="transferNotice" class="notice" style="display:none;">
+            🔄 Перенесённый <b>круг №<span id="transferCircleNum"></span></b> с <span id="transferDate"></span>. Завершите его сегодня.
+        </div>
+
+        <div id="topCircles"></div>
+
+        <div class="divider" id="topDivider"></div>
+
+        <div id="circleStatus" class="circle-status">
+            Текущий круг: <span id="currentCircleNum">1</span>
+        </div>
+
+        <div id="startSection">
+            <button class="btn-success" onclick="startCircle()" id="startBtn">▶️ Начать 1-й круг</button>
+            <button class="btn-secondary" onclick="showPeriodSelector()">📊 Выгрузить отчёт</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+
+        <div id="formSection" style="display:none;">
+            <div class="section-title">Параметры круга</div>
+            <div class="grid-2">
+                <div>
+                    <div class="input-group">
+                        <label>Сумма (₽)</label>
+                        <input type="text" inputmode="numeric" id="amount" value="10 000 000" oninput="formatAmountInput(this)">
+                    </div>
+                    <div class="grid-2">
+                        <div class="input-group">
+                            <label>Покупка</label>
+                            <input type="number" step="0.01" id="buyPrice" value="84.65">
+                        </div>
+                        <div class="input-group">
+                            <label>Продажа</label>
+                            <input type="number" step="0.01" id="sellPrice" value="87.98">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="input-group">
+                        <label>Начало</label>
+                        <input type="datetime-local" id="startTime">
+                    </div>
+                    <div class="input-group">
+                        <label>Конец</label>
+                        <input type="datetime-local" id="endTime">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-title">Комиссии и налог</div>
+            <div class="grid-3">
+                <div class="input-group">
+                    <label>Биржа (%)</label>
+                    <input type="number" step="0.01" id="exchangeComm" value="0.7">
+                </div>
+                <div class="input-group">
+                    <label>Обменник (%)</label>
+                    <input type="number" step="0.01" id="exchangerComm" value="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Банк (₽)</label>
+                    <input type="number" step="1" id="bankComm" value="3000">
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="taxToggle" checked>
+                <label for="taxToggle">Учитывать налог 13%</label>
+            </div>
+
+            <button class="btn-primary" onclick="finishCircle()">✅ Завершить круг</button>
+            <button class="btn-warning" onclick="transferCircle()">⏭ Перенести на завтра</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+
+        <div id="nextSection" style="display:none;">
+            <button class="btn-success" onclick="resetForNextCircle()" id="nextBtn">▶️ Начать следующий круг</button>
+            <button class="btn-secondary" onclick="showPeriodSelector()">📊 Выгрузить отчёт</button>
+            <button class="btn-danger" onclick="finishDay()">🏁 Завершить день</button>
+        </div>
+
+        <div id="results" class="results"></div>
+    </div>    <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
         tg.expand();
